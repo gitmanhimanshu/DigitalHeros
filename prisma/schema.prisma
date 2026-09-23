@@ -1,0 +1,171 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  name                 String
+  email                String               @unique
+  passwordHash         String
+  role                 String               @default("SUBSCRIBER") // "SUBSCRIBER" | "ADMIN"
+  avatarUrl            String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  subscription         Subscription?
+  scores               GolfScore[]
+  donations            CharityDonation[]
+  drawEntries          DrawEntry[]
+  winnerVerifications  WinnerVerification[]
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planType             String    @default("MONTHLY") // "MONTHLY" | "YEARLY"
+  status               String    @default("ACTIVE")  // "ACTIVE" | "INACTIVE" | "CANCELLED" | "LAPSED"
+  price                Float     @default(29.0)
+  charityId            String?
+  charity              Charity?  @relation(fields: [charityId], references: [id], onDelete: SetNull)
+  charityPercent       Float     @default(10.0)      // Minimum 10%
+  currentPeriodStart   DateTime  @default(now())
+  renewalDate          DateTime
+  stripeSubscriptionId String?
+  stripeCustomerId     String?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model Charity {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  category         String            // "Health", "Youth", "Veterans", "Environment", "Community"
+  mission          String
+  description      String
+  logoUrl          String
+  coverImageUrl    String
+  featured         Boolean           @default(false)
+  totalRaised      Float             @default(0.0)
+  activeSupporters Int               @default(0)
+  upcomingEvents   String            @default("[]") // JSON string of events array
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  subscriptions    Subscription[]
+  donations        CharityDonation[]
+}
+
+model CharityDonation {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  charityId       String
+  charity         Charity  @relation(fields: [charityId], references: [id], onDelete: Cascade)
+  donorName       String?
+  donorEmail      String?
+  amount          Float
+  type            String   @default("SUBSCRIPTION_SHARE") // "SUBSCRIPTION_SHARE" | "DIRECT_DONATION"
+  stripePaymentId String?
+  createdAt       DateTime @default(now())
+}
+
+model GolfScore {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score      Int      // 1 to 45 (Stableford format)
+  playedOn   DateTime // Date of round (stored as normalized Date/Time)
+  courseName String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, playedOn]) // Strictly 1 score per date per user
+  @@index([userId, playedOn])
+}
+
+model Draw {
+  id                      String               @id @default(cuid())
+  drawNumber              Int                  @unique
+  title                   String
+  drawDate                DateTime
+  status                  String               @default("SCHEDULED") // "SCHEDULED" | "SIMULATED" | "PUBLISHED"
+  drawLogic               String               @default("RANDOM")    // "RANDOM" | "ALGORITHMIC"
+  cadence                 String               @default("MONTHLY")   // "MONTHLY" | "SPECIAL"
+  winningNumbers          String               @default("[]")        // JSON array of 5 numbers [n1, n2, n3, n4, n5]
+  totalPrizePool          Float                @default(0.0)
+  jackpotRolloverIn       Float                @default(0.0)
+  jackpotRolloverOut      Float                @default(0.0)
+  tier5WinnersCount       Int                  @default(0)
+  tier4WinnersCount       Int                  @default(0)
+  tier3WinnersCount       Int                  @default(0)
+  tier5PrizePerWinner     Float                @default(0.0)
+  tier4PrizePerWinner     Float                @default(0.0)
+  tier3PrizePerWinner     Float                @default(0.0)
+  simulationData          String?              // JSON data of last simulation run
+  publishedAt             DateTime?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  entries                 DrawEntry[]
+  verifications           WinnerVerification[]
+}
+
+model DrawEntry {
+  id             String   @id @default(cuid())
+  drawId         String
+  draw           Draw     @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userScores     String   // JSON array of 5 scores at draw time
+  matchedCount   Int      @default(0) // 0 to 5
+  matchedNumbers String   @default("[]") // JSON array of matched numbers
+  tier           String   @default("NONE") // "MATCH_5" | "MATCH_4" | "MATCH_3" | "NONE"
+  prizeWon       Float    @default(0.0)
+  createdAt      DateTime @default(now())
+
+  @@unique([drawId, userId])
+  @@index([drawId, tier])
+}
+
+model WinnerVerification {
+  id            String    @id @default(cuid())
+  drawId        String
+  draw          Draw      @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  drawEntryId   String?
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier          String    // "MATCH_5" | "MATCH_4" | "MATCH_3"
+  prizeAmount   Float
+  proofImageUrl String?
+  status        String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  payoutStatus  String    @default("PENDING") // "PENDING" | "PAID"
+  adminNotes    String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([drawId, status])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     String   // JSON formatted string
+  updatedAt DateTime @updatedAt
+}
+
