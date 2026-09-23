@@ -14,7 +14,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { planType = 'MONTHLY', charityId, charityPercent = 10.0 } = body;
 
-    // Simulate / Process Stripe Subscription checkout
     // Direct native subscription checkout (simple assignment architecture without 3rd-party gateway)
     const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const updated = await createOrUpdateSubscription({
@@ -22,8 +21,6 @@ export async function POST(req: Request) {
       planType,
       charityId,
       charityPercent: Number(charityPercent),
-      stripeSubscriptionId: `sub_test_${Date.now()}`,
-      stripeCustomerId: `cus_test_${user.id.slice(0, 8)}`,
       stripeSubscriptionId: transactionId,
       stripeCustomerId: `usr_${user.id.slice(0, 8)}`,
     });
@@ -31,7 +28,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       subscription: updated,
-      message: 'Subscription successfully activated in Stripe Test Mode!',
       transactionId,
       message: 'Subscription successfully activated!',
     });
@@ -39,4 +35,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

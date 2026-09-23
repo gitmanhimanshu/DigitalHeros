@@ -22,4 +22,5 @@ yarn-error.log*
 Thumbs.db
 t.txt
 *.pdf
+*.tsbuildinfo
 
